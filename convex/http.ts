@@ -8,62 +8,50 @@ const http = httpRouter();
 http.route({
   path: "/clerk-webhook",
   method: "POST",
-  handler: httpAction(async (ctx, req) => {
-    const secret = process.env.CLERK_WEBHOOK_SECRET;
-    if (!secret) {
-      throw new Error("CLERK_WEBHOOK_SECRET is not set");
+  handler: httpAction(async (ctx, request) => {
+    const webhookSecret = process.env.CLERK_WEBHOOK_SECRET;
+
+    if (!webhookSecret) {
+      throw new Error("Missing CLERK_WEBHOOK_SECRET");
     }
 
-    const svix_id = req.headers.get("svix-id");
-    const svix_timestamp = req.headers.get("svix-timestamp");
-    const svix_signature = req.headers.get("svix-signature");
+    const svixId = request.headers.get("svix-id");
+    const svixSignature = request.headers.get("svix-signature");
+    const svixTimestamp = request.headers.get("svix-timestamp");
 
-    console.log(svix_id, svix_signature, svix_timestamp);
-
-    if (!svix_id || !svix_timestamp || !svix_signature) {
-      return new Response("Missing headers", { status: 400 });
+    if (!svixId || !svixSignature || !svixTimestamp) {
+      return new Response("Missing Svix headers", { status: 400 });
     }
 
-    const payload = await req.text();
+    const payload = await request.text();
 
-    const wh = new Webhook(secret);
-    let event: any;
-
+    const wh = new Webhook(webhookSecret);
     try {
-      event = wh.verify(payload, {
-        "svix-id": svix_id,
-        "svix-timestamp": svix_timestamp,
-        "svix-signature": svix_signature,
+      const event = wh.verify(payload, {
+        "svix-id": svixId,
+        "svix-signature": svixSignature,
+        "svix-timestamp": svixTimestamp,
       }) as any;
-    } catch (error) {
-      console.error("Webhook verification failed:", error);
-      return new Response("Invalid signature", { status: 400 });
-    }
 
-    const eventType = event.type;
+      if (event.type === "user.created") {
+        const { id, email_addresses, first_name, last_name, image_url } =
+          event.data;
+        const email = email_addresses[0].email_address;
 
-    if (eventType === "user.created") {
-      const { id, email_addresses, first_name, last_name, image_url } =
-        event.data;
-
-      const email = email_addresses[0];
-      const name = `${first_name || ""} ${last_name || ""}`.trim();
-
-      try {
         await ctx.runMutation(api.users.createUser, {
           email,
-          fullname: name,
-          image: image_url,
+          fullname: `${first_name || ""} ${last_name || ""}`.trim(),
           clerkId: id,
+          image: image_url,
           username: `${first_name}`,
         });
-      } catch (error) {
-        console.log("Error creating user:", error);
-        return new Response("Error creating user", { status: 500 });
       }
-    }
 
-    return new Response("Webhook received", { status: 200 });
+      return new Response("OK", { status: 200 });
+    } catch (err) {
+      console.error("Webhook error:", err);
+      return new Response("Verification failed", { status: 400 });
+    }
   }),
 });
 
