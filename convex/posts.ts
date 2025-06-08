@@ -47,7 +47,7 @@ export const getPosts = query({
 
     const postsWithInfo = await Promise.all(
       posts.map(async (post) => {
-        const postAuthor = await ctx.db.get(post.userId);
+        const postAuthor = (await ctx.db.get(post.userId))!;
 
         const like = await ctx.db
           .query("likes")
@@ -63,11 +63,11 @@ export const getPosts = query({
             username: postAuthor?.username,
             image: postAuthor?.image,
           },
-          isLike: !!like,
+          isLiked: !!like,
         };
       })
     );
 
-    return posts;
+    return postsWithInfo;
   },
 });
