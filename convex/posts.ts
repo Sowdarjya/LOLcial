@@ -71,3 +71,50 @@ export const getPosts = query({
     return postsWithInfo;
   },
 });
+
+export const toggleLike = mutation({
+  args: { postId: v.id("posts") },
+  handler: async (ctx, args) => {
+    const currentUser = await getAuthenticatedUser(ctx);
+
+    console.log(currentUser);
+
+    const existing = await ctx.db
+      .query("likes")
+      .withIndex("by_user_and_post", (q) =>
+        q.eq("userId", currentUser._id).eq("postId", args.postId)
+      )
+      .first();
+
+    console.log(existing);
+
+    const post = await ctx.db.get(args.postId);
+    if (!post) throw new Error("post not found");
+
+    console.log(post);
+
+    if (existing) {
+      await ctx.db.delete(existing._id);
+      await ctx.db.patch(args.postId, { likes: post.likes - 1 });
+      return false;
+    } else {
+      await ctx.db.patch(args.postId, { likes: post.likes + 1 });
+
+      console.log(currentUser._id !== post.userId);
+      console.log(currentUser._id);
+      console.log(post._id);
+
+      if (currentUser._id !== post.userId) {
+        const res = await ctx.db.insert("notification", {
+          receiverId: post.userId,
+          senderId: currentUser._id,
+          type: "like",
+          postId: args.postId,
+        });
+        console.log(res);
+      }
+
+      return true;
+    }
+  },
+});
