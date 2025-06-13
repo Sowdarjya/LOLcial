@@ -35,7 +35,7 @@ const Post = ({ post }: PostProps) => {
     try {
       const newIsLiked = await toggleLike({ postId: post._id });
       setIsLiked(newIsLiked);
-      setLikesCount((prev) => (newIsLiked ? prev + 1 : prev - 1));
+      setLikesCount((prev) => prev + (newIsLiked ? 1 : -1));
     } catch (error) {
       console.error("error toggling like");
     }

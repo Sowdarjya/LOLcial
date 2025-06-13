@@ -7,7 +7,7 @@ import { useAuth } from "@clerk/clerk-expo";
 import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "convex/react";
 import React from "react";
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { FlatList, Text, TouchableOpacity, View } from "react-native";
 
 const index = () => {
   const { signOut } = useAuth();
@@ -27,17 +27,15 @@ const index = () => {
         </TouchableOpacity>
       </View>
 
-      <ScrollView
+      <FlatList
+        data={posts}
+        renderItem={({ item }) => (
+          <Post post={{ ...item, caption: item.caption ?? "" }} />
+        )}
+        keyExtractor={(item) => item._id}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 60 }}
-      >
-        {posts.map((post) => (
-          <Post
-            key={post._id}
-            post={{ ...post, caption: post.caption ?? "" }}
-          />
-        ))}
-      </ScrollView>
+      />
     </View>
   );
 };
