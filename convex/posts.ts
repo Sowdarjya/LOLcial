@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { getAuthenticatedUser } from "./users";
 
@@ -37,84 +38,77 @@ export const createPost = mutation({
   },
 });
 
-export const getPosts = query({
-  handler: async (ctx) => {
-    const currentUser = await getAuthenticatedUser(ctx);
-
-    const posts = await ctx.db.query("posts").order("desc").collect();
-
-    if (posts.length === 0) return [];
-
-    const postsWithInfo = await Promise.all(
-      posts.map(async (post) => {
-        const postAuthor = (await ctx.db.get(post.userId))!;
-
-        const like = await ctx.db
-          .query("likes")
-          .withIndex("by_user_and_post", (q) =>
-            q.eq("userId", currentUser._id).eq("postId", post._id)
-          )
-          .first();
-
-        return {
-          ...post,
-          author: {
-            _id: postAuthor?._id,
-            username: postAuthor?.username,
-            image: postAuthor?.image,
-          },
-          isLiked: !!like,
-        };
-      })
-    );
-
-    return postsWithInfo;
-  },
-});
-
 export const toggleLike = mutation({
   args: { postId: v.id("posts") },
   handler: async (ctx, args) => {
     const currentUser = await getAuthenticatedUser(ctx);
+    if (!currentUser) throw new Error("Not authenticated");
+    const userId = currentUser._id;
 
-    console.log(currentUser);
-
-    const existing = await ctx.db
+    const existingLike = await ctx.db
       .query("likes")
       .withIndex("by_user_and_post", (q) =>
-        q.eq("userId", currentUser._id).eq("postId", args.postId)
+        q.eq("userId", userId).eq("postId", args.postId)
       )
-      .first();
+      .unique();
 
-    console.log(existing);
-
-    const post = await ctx.db.get(args.postId);
-    if (!post) throw new Error("post not found");
-
-    console.log(post);
-
-    if (existing) {
-      await ctx.db.delete(existing._id);
-      await ctx.db.patch(args.postId, { likes: post.likes - 1 });
+    if (existingLike) {
+      await ctx.db.delete(existingLike._id);
+      const post = await ctx.db.get(args.postId);
+      if (post && typeof post.likes === "number") {
+        await ctx.db.patch(args.postId, { likes: post.likes - 1 });
+      }
       return false;
     } else {
-      await ctx.db.patch(args.postId, { likes: post.likes + 1 });
-
-      console.log(currentUser._id !== post.userId);
-      console.log(currentUser._id);
-      console.log(post._id);
-
-      if (currentUser._id !== post.userId) {
-        const res = await ctx.db.insert("notification", {
-          receiverId: post.userId,
-          senderId: currentUser._id,
-          type: "like",
-          postId: args.postId,
-        });
-        console.log(res);
+      await ctx.db.insert("likes", { userId, postId: args.postId });
+      const post = await ctx.db.get(args.postId);
+      if (post && typeof post.likes === "number") {
+        await ctx.db.patch(args.postId, { likes: post.likes + 1 });
       }
-
       return true;
     }
+  },
+});
+
+export const getPosts = query({
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+
+    let userIdConvex: Id<"users"> | null = null;
+    if (identity) {
+      const user = await ctx.db
+        .query("users")
+        .withIndex("by_clerkId", (q) => q.eq("clerkId", identity.subject))
+        .first();
+      userIdConvex = user?._id ?? null;
+    }
+
+    const posts = await ctx.db.query("posts").order("desc").collect();
+
+    const likes = userIdConvex
+      ? await ctx.db
+          .query("likes")
+          .withIndex("by_user_and_post", (q) => q.eq("userId", userIdConvex))
+          .collect()
+      : [];
+
+    const likedPostIds = new Set(likes.map((like) => like.postId));
+
+    const postsWithAuthor = await Promise.all(
+      posts.map(async (post) => {
+        const author = await ctx.db.get(post.userId);
+        return {
+          ...post,
+          author: {
+            _id: author?._id,
+            username: author?.username,
+            image: author?.image,
+          },
+          isLiked: likedPostIds.has(post._id),
+        };
+      })
+    );
+
+    return postsWithAuthor;
   },
 });
