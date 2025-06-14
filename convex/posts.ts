@@ -38,37 +38,45 @@ export const createPost = mutation({
   },
 });
 
+// ...existing code...
+
 export const toggleLike = mutation({
   args: { postId: v.id("posts") },
-  handler: async (ctx, args) => {
-    const currentUser = await getAuthenticatedUser(ctx);
-    if (!currentUser) throw new Error("Not authenticated");
-    const userId = currentUser._id;
+  handler: async (ctx, { postId }) => {
+    const user = await getAuthenticatedUser(ctx);
 
-    const existingLike = await ctx.db
+    // Check if already liked
+    const existing = await ctx.db
       .query("likes")
       .withIndex("by_user_and_post", (q) =>
-        q.eq("userId", userId).eq("postId", args.postId)
+        q.eq("userId", user._id).eq("postId", postId)
       )
-      .unique();
+      .first();
 
-    if (existingLike) {
-      await ctx.db.delete(existingLike._id);
-      const post = await ctx.db.get(args.postId);
-      if (post && typeof post.likes === "number") {
-        await ctx.db.patch(args.postId, { likes: post.likes - 1 });
-      }
+    const post = await ctx.db.get(postId);
+    if (!post) throw new Error("Post not found");
+
+    if (existing) {
+      await ctx.db.delete(existing._id);
+      await ctx.db.patch(postId, { likes: post.likes - 1 });
       return false;
     } else {
-      await ctx.db.insert("likes", { userId, postId: args.postId });
-      const post = await ctx.db.get(args.postId);
-      if (post && typeof post.likes === "number") {
-        await ctx.db.patch(args.postId, { likes: post.likes + 1 });
+      await ctx.db.insert("likes", { userId: user._id, postId });
+      await ctx.db.patch(postId, { likes: post.likes + 1 });
+
+      if (user._id !== post.userId) {
+        await ctx.db.insert("notification", {
+          receiverId: post.userId,
+          senderId: user._id,
+          type: "like",
+          postId,
+        });
       }
       return true;
     }
   },
 });
+// ...existing code...
 
 export const getPosts = query({
   handler: async (ctx) => {
