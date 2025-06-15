@@ -2,8 +2,9 @@ import { COLORS } from "@/constants/theme";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { styles } from "@/styles/feed.styles";
+import { useUser } from "@clerk/clerk-expo";
 import { Ionicons } from "@expo/vector-icons";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { formatDistanceToNow } from "date-fns";
 import { Image } from "expo-image";
 import { Link } from "expo-router";
@@ -34,7 +35,19 @@ const Post = ({ post }: PostProps) => {
   const [commentsCount, setCommentsCount] = useState(post.comments);
   const [showComments, setShowComments] = useState(false);
 
+  const { user } = useUser();
+
+  const currentUser = useQuery(
+    api.users.getUserByClerkId,
+    user
+      ? {
+          clerkId: user?.id,
+        }
+      : "skip"
+  );
+
   const toggleLike = useMutation(api.posts.toggleLike);
+  const deletePost = useMutation(api.posts.deletePost);
 
   const handleLike = async () => {
     try {
@@ -43,6 +56,14 @@ const Post = ({ post }: PostProps) => {
       setLikesCount((prev) => prev + (newIsLiked ? 1 : -1));
     } catch (error) {
       console.error("error toggling like");
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await deletePost({ postId: post._id });
+    } catch (error) {
+      console.error("error deleting post");
     }
   };
 
@@ -62,13 +83,19 @@ const Post = ({ post }: PostProps) => {
           </TouchableOpacity>
         </Link>
 
-        {/* <TouchableOpacity>
-            <Ionicons name="ellipsis-horizontal" size={20} color={COLORS.white} />
-        </TouchableOpacity> */}
-
-        <TouchableOpacity>
-          <Ionicons name="trash-outline" size={20} color={COLORS.primary} />
-        </TouchableOpacity>
+        {currentUser?._id === post.author._id ? (
+          <TouchableOpacity onPress={handleDelete}>
+            <Ionicons name="trash-outline" size={24} color={COLORS.primary} />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity>
+            <Ionicons
+              name="ellipsis-vertical-outline"
+              size={24}
+              color={COLORS.white}
+            />
+          </TouchableOpacity>
+        )}
       </View>
 
       <Image
@@ -85,7 +112,7 @@ const Post = ({ post }: PostProps) => {
             <Ionicons
               name={isliked ? "heart" : "heart-outline"}
               size={24}
-              color={isliked ? COLORS.primary : COLORS.white}
+              color={isliked ? COLORS.secondary : COLORS.white}
             />
           </TouchableOpacity>
           <TouchableOpacity onPress={() => setShowComments(true)}>
@@ -111,11 +138,13 @@ const Post = ({ post }: PostProps) => {
           </View>
         )}
 
-        <TouchableOpacity onPress={() => setShowComments(true)}>
-          <Text style={styles.commentsText}>
-            View all {commentsCount} comments
-          </Text>
-        </TouchableOpacity>
+        {commentsCount > 0 && (
+          <TouchableOpacity onPress={() => setShowComments(true)}>
+            <Text style={styles.commentsText}>
+              View all {commentsCount} comments
+            </Text>
+          </TouchableOpacity>
+        )}
 
         <Text style={styles.timeAgo}>
           {formatDistanceToNow(post._creationTime, { addSuffix: true })}
