@@ -51,7 +51,6 @@ const login = () => {
           activeOpacity={0.8}
           onPress={handleGoogleLogin}
         >
-          ;
           <View style={styles.googleIconContainer}>
             <Ionicons name="logo-google" size={20} color={COLORS.surface} />
           </View>

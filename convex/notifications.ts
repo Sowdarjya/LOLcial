@@ -1,15 +1,10 @@
 import { query } from "./_generated/server";
+import { getAuthenticatedUser } from "./users";
 
 export const getNotifications = query({
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const currentUser = await getAuthenticatedUser(ctx);
 
-    if (!identity) throw new Error("Unauthorized");
-
-    const currentUser = await ctx.db
-      .query("users")
-      .withIndex("by_clerkId", (q) => q.eq("clerkId", identity.subject))
-      .first();
     if (!currentUser) throw new Error("User not found");
 
     const notifications = await ctx.db
