@@ -30,7 +30,17 @@ const index = () => {
       <FlatList
         data={posts}
         renderItem={({ item }) => (
-          <Post post={{ ...item, caption: item.caption ?? "" }} />
+          <Post
+            post={{
+              ...item,
+              caption: item.caption ?? "",
+              author: {
+                _id: item.author._id ? String(item.author._id) : "",
+                username: item.author.username ?? "",
+                image: item.author.image ?? "",
+              },
+            }}
+          />
         )}
         keyExtractor={(item) => item._id}
         showsVerticalScrollIndicator={false}

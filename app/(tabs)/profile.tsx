@@ -211,7 +211,7 @@ const profile = () => {
 
 export default profile;
 
-const NoPosts = () => {
+export const NoPosts = () => {
   return (
     <View style={styles.noPostsContainer}>
       <Text style={styles.noPostsText}>No posts yet</Text>
