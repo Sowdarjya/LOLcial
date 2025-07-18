@@ -132,7 +132,7 @@ const Post = ({ post }: PostProps) => {
       <View style={styles.postInfo}>
         <Text style={styles.likesText}>
           {post.likes > 0
-            ? `${post.likes.toLocaleString()}`
+            ? `${post.likes.toLocaleString()} likes`
             : "Be the first to like this post"}
         </Text>
         {post.caption && (
